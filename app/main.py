@@ -1,44 +1,31 @@
-from google import genai
-import os
-import time
-from dotenv import load_dotenv
+from fastapi import FastAPI
+from pydantic import BaseModel
+from app.github_fetcher import fetch_github_code
+from app.reviewer import review_code
 
-load_dotenv()
+app = FastAPI(title="AI Code Review Bot")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+class RepoRequest(BaseModel):
+    repo_url: str
 
-def review_code(filename: str, code: str) -> dict:
-    prompt = f"""
-You are an expert Python code reviewer.
-Review the following Python file named '{filename}' and provide structured feedback.
+@app.get("/")
+def root():
+    return {"message": "AI Code Review Bot is running"}
 
-Return your review in this exact format:
+@app.post("/review")
+def review_repo(request: RepoRequest):
+    code_files = fetch_github_code(request.repo_url)
 
-SEVERITY: (Critical / Warning / Suggestion)
-ISSUES:
-- issue 1
-- issue 2
-IMPROVEMENTS:
-- improvement 1
-- improvement 2
-SCORE: (a number from 1 to 10)
-SUMMARY: (2-3 sentences overall summary)
+    if "error" in code_files:
+        return {"error": code_files["error"]}
 
-Code to review:
-{code}
-"""
-    time.sleep(2)
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
-        )
-        return {
-            "filename": filename,
-            "review": response.text
-        }
-    except Exception as e:
-        return {
-            "filename": filename,
-            "review": f"Error during review: {str(e)}"
-        }
+    reviews = []
+    for filename, code in code_files.items():
+        result = review_code(filename, code)
+        reviews.append(result)
+
+    return {
+        "repo": request.repo_url,
+        "total_files_reviewed": len(reviews),
+        "reviews": reviews
+    }

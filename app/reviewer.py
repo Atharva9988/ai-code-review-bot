@@ -1,11 +1,11 @@
-from google import genai
 import os
 import time
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def review_code(filename: str, code: str) -> dict:
     prompt = f"""
@@ -27,19 +27,20 @@ SUMMARY: (2-3 sentences overall summary)
 Code to review:
 {code}
 """
-    time.sleep(2)
+    time.sleep(1)
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
         return {
             "filename": filename,
-            "review": response.text
+            "review": response.choices[0].message.content
         }
     except Exception as e:
         return {
             "filename": filename,
             "review": f"Error during review: {str(e)}"
         }
-    
